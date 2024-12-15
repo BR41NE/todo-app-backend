@@ -16,9 +16,31 @@ class TaskController extends Controller
     use ResponseHelperTrait;
     public function index(Request $request)
     {
+        $validation = Validator::make($request->all(), [
+            'limit' => 'integer',
+            'filter_by' => 'in:title,description,status',
+            'search' => 'string',
+        ]);
+
+
+        if ($validation->fails()) {
+            return $this->response(
+                Response::HTTP_UNPROCESSABLE_ENTITY,
+                $validation->errors(),
+                'Validation error'
+            );
+        }
+
         $limit = $request->limit ?? 10;
 
-        $tasks = Task::paginate($limit);
+        $tasks = Task::query()
+            ->when($request->filter_by == 'status', function ($query, $filter_by) use ($request) {
+                $query->where($filter_by, $request->search);
+            })
+            ->when($request->filter_by && $request->filter_by != 'status', function ($query, $filter_by) use ($request) {
+                $query->where($filter_by, 'like', '%' . $request->search . '%');
+            })
+            ->paginate($limit);
 
         $data['tasks'] = TaskResource::collection($tasks);
 
